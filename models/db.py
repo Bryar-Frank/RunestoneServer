@@ -213,7 +213,7 @@ def get_course_url(*args):
 
 
 def getCourseNameFromId(courseid):
-    """ used to compute auth.user.course_name field """
+    """used to compute auth.user.course_name field"""
     q = db.courses.id == courseid
     row = db(q).select().first()
     return row.course_name if row else ""
@@ -542,7 +542,7 @@ def admin_logger(logger):
             course = auth.user.course_name
         else:
             sid = "Anonymous"
-            course = "Unknown"
+            course = "boguscourse"
         try:
             db.useinfo.insert(
                 sid=sid,
@@ -553,7 +553,10 @@ def admin_logger(logger):
                 course_id=course,
             )
         except Exception as e:
-            logger.error(f"failed to insert log record for practice: {e}")
+            logger.error(
+                f"failed to insert log record for {request.controller} {request.function}: {e}"
+            )
+            db.rollback()
 
 
 def createUser(username, password, fname, lname, email, course_name, instructor=False):

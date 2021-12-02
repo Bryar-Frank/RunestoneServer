@@ -8,14 +8,8 @@
 # `gzip_static <http://nginx.org/en/docs/http/ngx_http_gzip_static_module.html>`_: Enables ("on") or disables ("off") checking the existence of precompressed files. Send compressed files in lieu of uncompressed files where they exist. This requires the optional ``ngx_http_gzip_static_module`` module.
 gzip_static on;
 
-${PRODUCTION_ONLY}
-
-${FORWARD_HTTP}
-
 # Define the web2py and FastAPI servers.
 server {
-    # For testing, use port 80 (http); for production, use port 443 (https).
-    listen ${LISTEN_PORT} deferred;
     include /etc/nginx/default.d/*.conf;
 
     # `server_name <http://nginx.org/en/docs/http/ngx_http_core_module.html#server_name>`_: Set name(s) of a virtual server.
@@ -65,13 +59,19 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         # `proxy_pass <https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass>`_: set the protocol and address of a proxied server and an optional URI to which a location should be mapped. **Tricky**: Specifying the ``location`` above with a trailing slash and including a trailing slash at the end of ``proxy_pass`` causes nginx to strip of the ``/ns`` prefix when sending it to gunicorn. Quoting the docs: "If the ``proxy_pass`` directive is specified with a URI, then when a request is passed to the server, the part of a normalized request URI matching the location is replaced by a URI specified in the directive."
-        proxy_pass http://unix:/run/gunicorn.sock:/;
+        #
+        # _`gunicorn socket`: This matches the ``--bind`` parameter when `gunicorn is run <run_bookserver>`.
+        proxy_pass http://unix:/run/fastapi.sock:/;
     }
 
     location / {
-        # Per `uwsgi_param <https://nginx.org/en/docs/http/ngx_http_uwsgi_module.html#uwsgi_param>`_, this passes standard CGI environment variables.
-        include uwsgi_params;
-        # `uwsgi_pass <https://nginx.org/en/docs/http/ngx_http_uwsgi_module.html#uwsgi_pass>`_: sets the protocol and address of a uwsgi server.
-        uwsgi_pass unix:/run/uwsgi/web2py.sock;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Host $http_host;
+      # we don't want nginx trying to do something clever with
+      # redirects, we set the Host: header above already.
+      proxy_redirect off;
+      # See `../../gunicorn/web2py.conf.py` for the corresponding socket bind.
+      proxy_pass http://unix:/run/web2py.sock:/;
     }
 }
