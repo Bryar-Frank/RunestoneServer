@@ -417,6 +417,7 @@ class ProgressMetrics(object):
 
 class SubChapterActivity(object):
     def __init__(self, sub_chapter, total_users):
+        rslogger.debug(f"subchapActivity {total_users}")
         self.sub_chapter_label = sub_chapter.sub_chapter_label
         rslogger.debug(sub_chapter.sub_chapter_name)
         self.sub_chapter_text = sub_chapter.sub_chapter_label
@@ -427,12 +428,13 @@ class SubChapterActivity(object):
         self.total_users = total_users if total_users > 0 else 1
 
     def add_activity(self, row):
-        if row.user_sub_chapter_progress.status == -1:
-            self.not_started += 1
+        # if row.user_sub_chapter_progress.status == -1:
+        #     self.not_started += 1
         if row.user_sub_chapter_progress.status == 0:
             self.started += 1
         if row.user_sub_chapter_progress.status == 1:
             self.completed += 1
+        self.not_started = self.total_users - self.started - self.completed
 
     def get_started_percent(self):
         return "{0:.2f}%".format(float(self.started) / self.total_users * 100)
@@ -457,7 +459,8 @@ class DashboardDataAnalyzer(object):
         )
 
         self.users = current.db(
-            (current.db.auth_user.course_id == current.auth.user.course_id)
+            (current.db.user_courses.course_id == current.auth.user.course_id)
+            & (current.db.user_courses.user_id == current.db.auth_user.id)
             & (current.db.auth_user.active == "T")
         ).select(
             current.db.auth_user.username,
@@ -484,7 +487,8 @@ class DashboardDataAnalyzer(object):
         # todo:  Yikes!  Loading all of the log data for a large or even medium class is a LOT
         self.db_chapter_progress = current.db(
             (current.db.user_sub_chapter_progress.user_id == current.db.auth_user.id)
-            & (current.db.auth_user.course_id == current.auth.user.course_id)
+            & (current.db.user_courses.course_id == current.auth.user.course_id)
+            & (current.db.user_courses.user_id == current.db.auth_user.id)
             & (  # todo: missing link from course_id to chapter/sub_chapter progress
                 current.db.user_sub_chapter_progress.chapter_id == chapter.chapter_label
             )
@@ -541,7 +545,8 @@ class DashboardDataAnalyzer(object):
         self.user = (
             current.db(
                 (current.db.auth_user.username == username)
-                & (current.db.auth_user.course_id == self.course_id)
+                & (current.db.user_courses.user_id == current.db.auth_user.id)
+                & (current.db.user_courses.course_id == self.course_id)
             )
             .select(
                 current.db.auth_user.id,

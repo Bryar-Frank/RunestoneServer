@@ -156,34 +156,38 @@ function autoGrade() {
             // Grade each student provided.
             let student_array = Object.keys(students);
             let total = 0;
-            $("#gradingprogresstitle").html("<h3>Grading Progress</h3>");
+            $("#gradingprogresstitle").html("<h3>Grading in Progress</h3>");
             $("#autogradingprogress").html("");
             $("#autogradingprogress").css("border", "1px solid");
             for (let index = 0; index < student_array.length; ++index) {
                 let student = student_array[index];
                 ajax_params.data.sid = student;
-                res = await jQuery.ajax(ajax_params);
-                $("#autogradingprogress").append(
-                    `${index + 1} of ${student_array.length}: ${student}
+                try {
+                    res = await jQuery.ajax(ajax_params);
+                    $("#autogradingprogress").append(
+                        `${index + 1} of ${student_array.length}: ${student}
                         <a href="/runestone/dashboard/questiongrades?sid=${encodeURIComponent(
-                        student
-                    )}&assignment_id=${encodeURIComponent(assignment)}">${students[student]
-                    }</a>
+                            student
+                        )}&assignment_id=${encodeURIComponent(assignment)}">${students[student]
+                        }</a>
                         ${res.message}
                         Score: ${res.total_mess} <br>`
-                );
-                total = total + res.total_mess;
-                $("#autogradingprogress").animate({
-                    scrollTop: $("#autogradingprogress").height(),
-                });
-            }
+                    );
+                    total = total + res.total_mess;
+                    $("#autogradingprogress").animate({
+                        scrollTop: $("#autogradingprogress").height(),
+                    });
+                } catch (e) {
+                    console.log(`Error when autograding ${student} is ${e}`);
+                }
+            } // end for
             $("#autogradingprogress").append(
                 `Average Score: ${total / student_array.length}`
             );
             $("#autogradingprogress").animate({
                 scrollTop: $("#autogradingprogress").height(),
             });
-
+            $("#gradingprogresstitle").html("<h3>Grading Complete</h3>");
             gradingSummary("autogradingsummary");
             $("#autogradesubmit").prop("disabled", false);
         })(students, params);
@@ -1289,6 +1293,10 @@ function update_assignment(form) {
             return;
         }
     }
+    if (form.is_peer.checked && form.is_timed.checked) {
+        alert("An assignment can not have both Timed and Peer checked")
+        return;
+    }
     if (form.visible.checked) {
         data.visible = "T";
     } else {
@@ -1313,6 +1321,11 @@ function update_assignment(form) {
         data.nopause = "T";
     } else {
         data.nopause = "F";
+    }
+    if (form.is_peer.checked) {
+        data.is_peer = "T";
+    } else {
+        data.is_peer = "F";
     }
     data.timelimit = form.timelimit.value;
     data.description = form.description.value;
@@ -1375,6 +1388,7 @@ function assignmentInfo() {
             $("#timelimit").val(assignmentData.time_limit);
             $("#nopause").val(assignmentData.nopause);
             $("#nofeedback").val(assignmentData.nofeedback);
+            $("#assign_is_peer").val(assignmentData.is_peer);
             if (assignmentData.visible === true) {
                 $("#assign_visible").prop("checked", true);
             } else {
@@ -1394,6 +1408,11 @@ function assignmentInfo() {
                 $("#nopause").prop("checked", true);
             } else {
                 $("#nopause").prop("checked", false);
+            }
+            if (assignmentData.is_peer === true) {
+                $("#assign_is_peer").prop("checked", true);
+            } else {
+                $("#assign_is_peer").prop("checked", false);
             }
             if (assignmentData.is_timed === true) {
                 $("#assign_is_timed").prop("checked", true);
@@ -1734,7 +1753,7 @@ function preview_question_id(question_id, preview_div, sid, gradeit) {
         // Render it.
         data = { acid: question_id };
         if (sid) {
-            data.sid = sid;
+            data.sid = decodeURIComponent(sid);
             data.graderactive = true;
             data.useRunestoneServices = true;
         }
@@ -2106,7 +2125,10 @@ function edit_question(form) {
     jQuery.post("/runestone/admin/edit_question", data, function (myres) {
         alert(myres);
         if (myres.includes("Success")) {
-            $("#editModal").modal("hide");
+            //$("#editModal").modal("hide");
+            //$("#close_editor_now").click();
+            // TODO: Figure out why this leaves the main screen gray and buttons unresponsive.
+            // emulating the click on the close button should work but does not.
         }
     });
 }

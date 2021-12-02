@@ -106,7 +106,7 @@ pygments_style = "sphinx"
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones. **CodeChat
 # note:** The ``CodeChat.CodeToRestSphinx`` extension is mandatory; without it,
 # CodeChat will not translate source code to reST and then (via Sphinx) to html.
-extensions = ["CodeChat.CodeToRestSphinx", "recommonmark", "sphinx.ext.intersphinx"]
+extensions = ["CodeChat.CodeToRestSphinx", "myst_parser", "sphinx.ext.intersphinx"]
 
 # `templates_path <http://sphinx-doc.org/config.html#confval-templates_path>`_:
 # Add any paths that contain templates here, relative to this directory.
@@ -141,6 +141,10 @@ CodeChat_lexer_for_glob = {
     "*.js": "JavaScript",
     # The Dockerfile has ``#`` as comments. So does Perl...
     "Dockerfile": "Perl",
+    "*.conf": "Perl",
+    "runestone.template": "Perl",
+    # Docker's env files are INI formatted.
+    ".env*": "INI",
 }
 
 # `source_encoding <http://sphinx-doc.org/config.html#confval-source_encoding>`_:
@@ -169,6 +173,7 @@ exclude_patterns = [
     ".DS_Store",
     ".pytest_cache",
     "tests/.pytest_cache",
+    ".venv",
     # Don't build textbooks.
     "books",
     # Ignore Runestone files.
@@ -206,6 +211,7 @@ exclude_patterns = [
     "jobeinabox/include",
     # Ignore the Sphinx build directory output.
     "_build",
+    "tests/test_course_1/build",
     # **CodeChat notes:**
     #
     # The ``CodeToRestSphinx`` extension creates a file named

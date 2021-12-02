@@ -4,6 +4,7 @@ import logging
 from operator import itemgetter
 from collections import OrderedDict
 import urllib.parse
+import re
 import six
 import pandas as pd
 import numpy as np
@@ -311,6 +312,7 @@ def index():
     return dict(
         assignments=assignments,
         course=course,
+        is_instructor=True,
         questions=questions,
         sections=sections,
         chapters=chapters,
@@ -450,11 +452,13 @@ def grades():
     # recalculate total points for each assignment in case the stored
     # total is out of sync.
     duedates = []
+    totalpoints = []
     for assign in assignments:
         assign.points = update_total_points(assign.id)
         duedates.append(date2String(assign.duedate))
+        totalpoints.append(assign.points)
 
-    students = db(
+    allstudents = db(
         (db.user_courses.course_id == auth.user.course_id)
         & (db.auth_user.id == db.user_courses.user_id)
     ).select(
@@ -473,7 +477,12 @@ def grades():
         where points is not null and assignments.course = %s and auth_user.id in
             (select user_id from user_courses where course_id = %s)
             order by last_name, first_name, assignments.duedate, assignments.id;"""
-    rows = db.executesql(query, [course["id"], course["id"]])
+    trows = db.executesql(query, [course["id"], course["id"]])
+    rows = []
+    for row in trows:
+        # remove instructor rows from trows
+        if not verifyInstructorStatus(auth.user.course_id, row[3]):
+            rows.append(row)
 
     studentinfo = {}
     practice_setting = (
@@ -481,7 +490,12 @@ def grades():
     )
     practice_average = 0
     total_possible_points = 0
-    for s in students:
+    students = []
+    for s in allstudents:
+        if verifyInstructorStatus(auth.user.course_id, s.id):
+            # filter out instructors from the gradebook
+            continue
+        students.append(s)
         if practice_setting:
             if practice_setting.spacing == 1:
                 practice_completion_count = db(
@@ -521,7 +535,10 @@ def grades():
             if total_possible_points > 0
             else "n/a",
         }
-    practice_average /= len(students)
+    try:
+        practice_average /= len(students)
+    except ZeroDivisionError:
+        practice_average = 0.0
     practice_average = "{0:.2f}".format(practice_average)
 
     # create a matrix indexed by user.id and assignment.id
@@ -573,6 +590,7 @@ def grades():
         averagerow=averagerow,
         practice_average=practice_average,
         duedates=duedates,
+        totalpoints=totalpoints,
     )
 
 
@@ -686,7 +704,7 @@ def exercisemetrics():
     prob_id = request.vars["id"]
     answers = []
     attempt_histogram = []
-    logger.debug(problem_metrics.problems)
+    logger.debug(f"PROBLEMS for problem metrics {problem_metrics.problems}")
     try:
         problem_metric = problem_metrics.problems[prob_id]
     except KeyError:
@@ -718,6 +736,11 @@ def exercisemetrics():
 
 
 def format_cell(sid, chap, subchap, val):
+    # extract the username from the friendly version of the name
+    g = re.match(r".*<br>\((.*)\)", sid)
+    if g:
+        sid = g.group(1)
+
     sid = urllib.parse.quote(sid)
     if np.isnan(val):
         return ""
@@ -741,7 +764,7 @@ def subchapoverview():
     dburl = _get_dburl()
     data = pd.read_sql_query(
         """
-    select sid, useinfo.timestamp, div_id, chapter, subchapter from useinfo
+    select sid, first_name, last_name, useinfo.timestamp, div_id, chapter, subchapter from useinfo
     join questions on div_id = name and base_course = '{}' join auth_user on username = useinfo.sid
     where useinfo.course_id = '{}' and active='T' and useinfo.timestamp >= '{}'""".format(
             thecourse.base_course, course, thecourse.term_start_date
@@ -750,6 +773,9 @@ def subchapoverview():
         parse_dates=["timestamp"],
     )
     data = data[~data.sid.str.contains(r"^\d{38,38}@")]
+    data["sid"] = data.last_name + ", " + data.first_name + "<br>(" + data.sid + ")"
+    data.drop(["first_name", "last_name"], axis=1)
+
     tdoff = pd.Timedelta(
         hours=float(session.timezoneoffset) if "timezoneoffset" in session else 0
     )
@@ -804,7 +830,7 @@ def subchapoverview():
         """
     select chapter, subchapter, count(*) act_count
     from questions
-    where base_course = '{}'
+    where base_course = '{}' and from_source = 'T'
     group by chapter, subchapter order by chapter, subchapter;
     """.format(
             thecourse.base_course
@@ -932,6 +958,7 @@ def subchapdetail():
         & (db.questions.subchapter == request.vars.sub)
         & (db.questions.base_course == thecourse.base_course)
         & (db.questions.question_type != "page")
+        & (db.questions.from_source == True)
     ).select(db.questions.name, db.questions.question_type)
 
     res = db.executesql(
@@ -939,7 +966,7 @@ def subchapdetail():
 select name, question_type, min(useinfo.timestamp) as first, max(useinfo.timestamp) as last, count(*) as clicks
     from questions join useinfo on name = div_id and course_id = %s
     where chapter = %s and subchapter = %s
-    and base_course = %s and sid = %s
+    and base_course = %s and sid = %s and from_source = 'T'
     group by name, question_type""",
         (
             auth.user.course_name,
@@ -1000,7 +1027,21 @@ select name, question_type, min(useinfo.timestamp) as first, max(useinfo.timesta
                     row["correct"] = "No"
             else:
                 row["correct"] = "NA"
-
+        elif row["question_type"] in ["khanex", "quizly"]:
+            kqres = (
+                db(
+                    (db.useinfo.sid == request.vars.sid)
+                    & (db.useinfo.div_id == row["name"])
+                    & (db.useinfo.course_id == thecourse.course_name)
+                    & (db.useinfo.act.like("%correct"))
+                )
+                .select()
+                .first()
+            )
+            if kqres:
+                row["correct"] = "Yes"
+            else:
+                row["correct"] = "No"
         else:
             row["correct"] = "NA"
 

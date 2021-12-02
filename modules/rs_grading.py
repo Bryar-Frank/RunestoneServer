@@ -419,6 +419,7 @@ def _autograde_one_q(
         return 0
 
     # If previously manually graded and it is required to save the score, don't overwrite.
+    logger.debug("AGDB - checking for existing")
     existing = (
         db(
             (db.question_grades.sid == sid)
@@ -446,6 +447,7 @@ def _autograde_one_q(
     # If the question type is a selectquestion then we need to resolve the
     # question for this student first, and we can recursively call again
     # with the actual question.
+    logger.debug("AGDB - begin questiontype")
     if question_type == "selectquestion":
         logger.debug("grading a selectquestion")
         actual_q = (
@@ -459,7 +461,9 @@ def _autograde_one_q(
         )
         if actual_q:
             act_question_name = actual_q.selected_questions.selected_id
-            act_points = actual_q.selected_questions.points
+            # points may not be specified, especially for selectquestions
+            # in the body of the book's text
+            act_points = actual_q.selected_questions.points or points
             act_question_type = actual_q.questions.question_type
             sel_id = actual_q.selected_questions.id
             score = _autograde_one_q(
@@ -483,7 +487,7 @@ def _autograde_one_q(
                 _save_question_grade(
                     sid, course_name, question_name, score, sel_id, deadline, db
                 )
-
+            logger.debug("AGDB - done with selectq")
             return score
 
         logger.error(f"Could not resolve a question for {question_name} student: {sid}")
@@ -507,6 +511,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_code_run
+        logger.debug("AGDB - done with activecode")
     elif question_type == "mchoice":
         results = _scorable_mchoice_answers(
             course_name,
@@ -519,6 +524,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_mchoice
+        logger.debug("AGDB - done with mchoice")
     elif question_type == "page":
         # question_name does not help us
         results = _scorable_useinfos(
@@ -533,6 +539,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_interaction
+        logger.debug("AGDB - done with page")
     elif question_type == "parsonsprob":
         results = _scorable_parsons_answers(
             course_name,
@@ -545,6 +552,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_parsons
+        logger.debug("AGDB - done with parsons")
     elif question_type == "fillintheblank":
         results = _scorable_fitb_answers(
             course_name,
@@ -557,6 +565,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_fitb
+        logger.debug("AGDB - done with fitb")
     elif question_type == "clickablearea":
         results = _scorable_clickablearea_answers(
             course_name,
@@ -569,6 +578,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_clickablearea
+        logger.debug("AGDB - done with clickable")
     elif question_type == "dragndrop":
         results = _scorable_dragndrop_answers(
             course_name,
@@ -581,6 +591,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_dragndrop
+        logger.debug("AGDB - done with dnd")
     elif question_type == "quizly":
         results = _scorable_useinfos(
             course_name,
@@ -593,6 +604,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_quizly
+        logger.debug("AGDB - done with quizly")
     elif question_type == "khanex":
         logger.debug("grading a khanex")
         results = _scorable_useinfos(
@@ -606,6 +618,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_khanex
+        logger.debug("AGDB - done with khanex")
 
     elif question_type == "codelens":
         if (
@@ -634,6 +647,7 @@ def _autograde_one_q(
                 now=now,
             )
             scoring_fn = _score_one_codelens
+            logger.debug("AGDB - done with codelens")
     elif question_type in ["video", "showeval", "youtube", "shortanswer", "poll"]:
         # question_name does not help us
         results = _scorable_useinfos(
@@ -648,6 +662,7 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_interaction
+        logger.debug("AGDB - done with video-et al")
     elif question_type == "lp_build":
         results = _scorable_lp_answers(
             course_name,
@@ -660,12 +675,13 @@ def _autograde_one_q(
             now=now,
         )
         scoring_fn = _score_one_lp
-
+        logger.debug("AGDB - done with LP")
     else:
         logger.debug("skipping; question_type = {}".format(question_type))
         return 0
 
     # use query results and the scoring function
+    logger.debug("AGDB - end question type")
     if results:
         logger.debug("WTG = %s", which_to_grade)
         if which_to_grade in ["first_answer", "last_answer", None, ""]:
@@ -697,6 +713,7 @@ def _autograde_one_q(
 
     # Save the score
     if save_score:
+        logger.debug("AGDB - saving score")
         _save_question_grade(sid, course_name, question_name, score, id, deadline, db)
 
     if practice_start_time:
@@ -710,6 +727,7 @@ def _autograde_one_q(
             db,
             now,
         )
+    logger.debug("AGDB - done")
     return score
 
 

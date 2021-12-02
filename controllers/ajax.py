@@ -2,7 +2,39 @@
 # |docname| - Runestone API
 # *************************
 # This module implements the API that the Runestone Components use to communicate with a Runestone Server.
+#  **Most of this file is Deprecated**
+# **Do not** make any changes to the following functions. They will be removed in an upcoming release.
+# def compareAndUpdateCookieData(sid: str):
+# def hsblog():
+# def runlog():
+# def gethist():
+# def getuser():
+# def set_tz_offset():
+# def updatelastpage():
+# def getCompletionStatus():
+# def getAllCompletionStatus():
+# def getlastpage():
+# def _getCorrectStats(miscdata, event):
+# def _getStudentResults(question: str):
+# def getaggregateresults():
+# def getpollresults():
+# def gettop10Answers():
+# def getassignmentgrade():
+# def _canonicalize_tz(tstring):
+# def getAssessResults():
+# def tookTimedAssessment():
+# def get_datafile():
+# def _same_class(user1: str, user2: str) -> bool:
+# def login_status():
+# def get_question_source():
 #
+# TODO: Move these to a new controller file (maybe admin.py)
+# def preview_question():
+# def save_donate():
+# def did_donate():
+# def broadcast_code():
+# def update_selected_question():
+# #
 # Imports
 # =======
 # These are listed in the order prescribed by `PEP 8
@@ -97,6 +129,9 @@ def hsblog():
         setCookie = True  # we set our own cookie anyway to eliminate many of the extraneous anonymous
         # log entries that come from auth timing out even but the user hasn't reloaded
         # the page.
+        # If the incoming data contains an sid then prefer that.
+        if request.vars.sid:
+            sid = request.vars.sid
     else:
         if request.vars.clientLoginStatus == "true":
             logger.error("Session Expired")
@@ -198,7 +233,7 @@ def hsblog():
         correct = request.vars.correct
         # Grade on the server if needed.
         do_server_feedback, feedback = is_server_feedback(div_id, course)
-        if do_server_feedback:
+        if do_server_feedback and answer_json is not None:
             correct, res_update = fitb_feedback(answer_json, feedback)
             res.update(res_update)
             pct = res["percent"]
@@ -369,8 +404,12 @@ def runlog():  # Log errors and runs with code
                     message="You appear to have changed courses in another tab.  Please switch to this course",
                 )
             )
-        sid = auth.user.username
+        if request.vars.sid:
+            sid = request.vars.sid
+        else:
+            sid = auth.user.username
         setCookie = True
+
     else:
         if request.vars.clientLoginStatus == "true":
             logger.error("Session Expired")
@@ -595,7 +634,7 @@ def updatelastpage():
             try:
                 db(
                     (db.user_state.user_id == auth.user.id)
-                    & (db.user_state.course_id == course)
+                    & (db.user_state.course_name == course)
                 ).update(
                     last_page_url=lastPageUrl,
                     last_page_chapter=lastPageChapter,
@@ -774,7 +813,7 @@ def getlastpage():
 
     result = db(
         (db.user_state.user_id == auth.user.id)
-        & (db.user_state.course_id == course.course_name)
+        & (db.user_state.course_name == course.course_name)
         & (db.chapters.course_id == course.base_course)
         & (db.user_state.last_page_chapter == db.chapters.chapter_label)
         & (db.sub_chapters.chapter_id == db.chapters.id)
@@ -799,7 +838,7 @@ def getlastpage():
             rowarray_list.append(res)
         return json.dumps(rowarray_list)
     else:
-        db.user_state.insert(user_id=auth.user.id, course_id=course.course_name)
+        db.user_state.insert(user_id=auth.user.id, course_name=course.course_name)
 
 
 def _getCorrectStats(miscdata, event):
@@ -1192,7 +1231,7 @@ def getAssessResults():
         #
         res = {"answer": rows.answer, "timestamp": str(rows.timestamp)}
         do_server_feedback, feedback = is_server_feedback(div_id, course)
-        if do_server_feedback:
+        if do_server_feedback and rows.answer != None:
             correct, res_update = fitb_feedback(rows.answer, feedback)
             res.update(res_update)
         return json.dumps(res)
